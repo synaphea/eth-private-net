@@ -1,21 +1,23 @@
 Param(
-   [string] $CMD,
-   [string] $IDENTITY1,
-   [string] $IDENTITY2
+  [string] $CMD,
+  [string] $IDENTITY1,
+  [string] $IDENTITY2
 )
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
-$IDENTITIES=@("alice", "bob", "lily")
-$FLAGS='--networkid=8888 --preload=identities.js'
-$DEV_FLAGS='--nodiscover --verbosity=4'
+$IDENTITIES = @("alice", "bob", "lily")
+$FLAGS = '   --networkid=8888  --preload=identities.js'
+$DEV_FLAGS = ' --nodiscover  --verbosity=4 '
 
-$BASE_PORT=40300
-$BASE_RPC_PORT=8100
+$version = "1.7.1-05101641"
 
-$SCRIPT=$MyInvocation.MyCommand.Name
+$BASE_PORT = 40300
+$BASE_RPC_PORT = 8100
 
-$USAGE="Name:
+$SCRIPT = $MyInvocation.MyCommand.Name
+
+$USAGE = "Name:
     $SCRIPT - Command line utility for creating and running a three node Ethereum private net
 
     Network comes with three identities at the following addresses:
@@ -41,17 +43,16 @@ Author:
 "
 
 function GetArch {
-  switch ($ENV:PROCESSOR_ARCHITECTURE) 
-    { 
-      "AMD64" {"amd64"}
-      "IA64" {"amd64"}
-      "x86" {"386"}
-    }
+  switch ($ENV:PROCESSOR_ARCHITECTURE) {
+    "AMD64" {"amd64"}
+    "IA64" {"amd64"}
+    "x86" {"386"}
+  }
 }
 
-function DownloadFile { 
+function DownloadFile {
   param($Url, $Output)
-  
+
   $start_time = Get-Date
   Write-Output "Start downloading from $Url"
   [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -60,82 +61,114 @@ function DownloadFile {
   Write-Output "Time taken: $((Get-Date).Subtract($start_time).Seconds) second(s)"
 }
 
-function Unzip
-{
-    param([string]$zipfile, [string]$outpath)
-    Write-Output "Unzip geth tools"
-    [System.IO.Compression.ZipFile]::ExtractToDirectory($zipfile, $outpath)
+function Unzip {
+  param([string]$zipfile, [string]$outpath)
+  Write-Output "Unzip geth tools"
+  [System.IO.Compression.ZipFile]::ExtractToDirectory($zipfile, $outpath)
 }
 
 function Setup {
-    $arch = GetArch
-    $version = "geth-alltools-windows-$arch-1.7.1-05101641"
-    $url = "https://gethstore.blob.core.windows.net/builds/$version.zip"
-    Remove-Item -Force -Confirm:$false -Recurse "bin" | Out-Null
-    New-Item -path . -name "bin" -itemtype directory | Out-Null
-    $output = "$PSScriptRoot\bin\geth.zip"
-    DownloadFile $url $output 
+  $arch = GetArch
+  $filename = "geth-alltools-windows-$arch-$version"
+  $url = "https://gethstore.blob.core.windows.net/builds/$filename.zip"
 
-    Unzip $output "$PSScriptRoot\bin"
-    Remove-Item -Force -Confirm:$false $output | Out-Null
-    Move-Item -Path "$PSScriptRoot\bin\$version\*" .\bin | Out-Null
-    Remove-Item -Force -Confirm:$false "$PSScriptRoot\bin\$version" | Out-Null
+  if (Test-Path "$PSScriptRoot\bin" ) {
+    Remove-Item -Force -Confirm:$false -Recurse "bin" | Out-Null
+  }
+
+  New-Item -path . -name "bin" -itemtype directory | Out-Null
+  $output = "$PSScriptRoot\bin\geth.zip"
+  DownloadFile $url $output
+
+  Unzip $output "$PSScriptRoot\bin"
+  Remove-Item -Force -Confirm:$false $output | Out-Null
+  Move-Item -Path "$PSScriptRoot\bin\$filename\*" .\bin | Out-Null
+  Remove-Item -Force -Confirm:$false "$PSScriptRoot\bin\$filename" | Out-Null
 }
 
 function Init {
-    Foreach ($IDENTITY in $IDENTITIES)
-    {
-        Write-Output  "Initializing genesis block for $IDENTITY"
-        .\bin\geth.exe --datadir=./$IDENTITY $FLAGS init genesis.json
-    }
+  Foreach ($IDENTITY in $IDENTITIES) {
+    Write-Output  "Initializing genesis block for $IDENTITY"
+    Write-Output ".\bin\geth.exe --datadir=$IDENTITY $FLAGS init genesis.json"
+    .\bin\geth.exe --datadir=$PSScriptRoot\$IDENTITY $FLAGS init genesis.json
+  }
 }
 
 function Clean {
-    Foreach ($IDENTITY in $IDENTITIES)
-    {
-        Write-Output  "Cleaning geth/ directory from $IDENTITY"
-        Remove-Item -Force -Confirm:$false -Recurse "$PSScriptRoot\$IDENTITY\geth" | Out-Null
-    }
+  Foreach ($IDENTITY in $IDENTITIES) {
+    Write-Output  "Cleaning geth/ directory from $IDENTITY"
+    Remove-Item -Force -Confirm:$false -Recurse "$PSScriptRoot\$IDENTITY\geth" | Out-Null
+  }
+}
+
+function GetOffset {
+  param([string] $IDENTITY)
+
+  switch ($IDENTITY) {
+      "alice" {
+        $OFFSET=1
+       }
+      "bob" {
+        $OFFSET=2
+       }
+      "lily" {
+        $OFFSET=3
+       }
+  }
+
+  return $OFFSET
 }
 
 function Start-Node {
-    param([string] $IDENTITY)
+  param([string] $IDENTITY)
 
-    Write-Output  "Start geth from $IDENTITY"
+  if (!$IDENTITY) {
+    Write-Host "No identity specified. Identity must be one of: ($IDENTITIES)"
+    exit -1
+  }
+
+  $OFFSET = GetOffset $IDENTITY
+
+  $PORT=$BASE_PORT + $OFFSET
+  $RPC_PORT=$BASE_RPC_PORT + $OFFSET
+
+  Write-Output "Starting node for $IDENTITY on port: $PORT, RPC port: $RPC_PORT. Console logs sent to ./$IDENTITY/console.log"
+  Write-Output "./bin/geth.exe --port=$PORT --rpcport=$RPC_PORT --datadir=./$IDENTITY --ipcpath=./$IDENTITY/geth.ipc $FLAGS $DEV_FLAGS console 2>> ./$IDENTITY/console.log"
+  ./bin/geth.exe --port=$PORT --rpcport=$RPC_PORT --ipcpath="$PSScriptRoot\$IDENTITY\geth.ipc" --datadir="$PSScriptRoot\$IDENTITY\" $FLAGS $DEV_FLAGS console 2>> .\$IDENTITY\console.log
 }
 
-function Connect {
-    param([string] $IDENTITY1, [string] $IDENTITY2)
-    Write-Output  "Connect geth from $IDENTITY1 to $IDENTITY2"
-    # ENODE=$(exec_on_node $IDENTITY1 'admin.nodeInfo.enode')
-    # CONNECT_JS="admin.addPeer($ENODE)"
+function Connect-Node {
+  param([string] $IDENTITY1, [string] $IDENTITY2)
+  Write-Output  "Connect geth from $IDENTITY1 to $IDENTITY2"
+  $ENODE=ExecOnNode 'admin.nodeInfo.enode' $IDENTITY1
+  # CONNECT_JS="admin.addPeer($ENODE)"
 
-    # exec_on_node $IDENTITY2 $CONNECT_JS
+  # exec_on_node $IDENTITY2 $CONNECT_JS
+  Write-Output  "Print $ENODE"
 }
 
 function ExecOnNode {
-    param($Exec, $Identity)
-    ./bin/geth --exec="$Exec" attach ./$Identity/geth.ipc
+  param($Exec, $Identity)
+  ./bin/geth --exec="$Exec" attach ./$Identity/geth.ipc
 }
 
-switch ($CMD) 
-    { 
-        "setup" {
-            Setup
-        }
-        "init" {
-            Init
-        }
-        "clean" {
-            Clean
-        }
-        "start" {
-            Start-Node $IDENTITY1
-        }
-        "connect" { 
-            Connect $IDENTITY1 $IDENTITY2
-        }
-        "help" {
-            Write-Output $USAGE
-        }
-    }
+switch ($CMD) {
+  "setup" {
+    Setup
+  }
+  "init" {
+    Init
+  }
+  "clean" {
+    Clean
+  }
+  "start" {
+    Start-Node $IDENTITY1
+  }
+  "connect" {
+    Connect-Node $IDENTITY1 $IDENTITY2
+  }
+  "help" {
+    Write-Output $USAGE
+  }
+}
