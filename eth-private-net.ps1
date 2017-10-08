@@ -7,8 +7,8 @@ Param(
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 $IDENTITIES = @("alice", "bob", "lily")
-$FLAGS = '   --networkid=8888  --preload=identities.js'
-$DEV_FLAGS = ' --nodiscover  --verbosity=4 '
+$FLAGS = "--networkid=8888 --preload=identities.js"
+$DEV_FLAGS = "--nodiscover  --verbosity=4"
 
 $version = "1.7.1-05101641"
 
@@ -89,8 +89,8 @@ function Setup {
 function Init {
   Foreach ($IDENTITY in $IDENTITIES) {
     Write-Output  "Initializing genesis block for $IDENTITY"
-    Write-Output ".\bin\geth.exe --datadir=$IDENTITY $FLAGS init genesis.json"
-    .\bin\geth.exe --datadir=$PSScriptRoot\$IDENTITY $FLAGS init genesis.json
+    $args = "$FLAGS --datadir=.\$IDENTITY"
+    Invoke-Expression ".\bin\geth.exe $args init genesis.json"
   }
 }
 
@@ -133,8 +133,9 @@ function Start-Node {
   $RPC_PORT=$BASE_RPC_PORT + $OFFSET
 
   Write-Output "Starting node for $IDENTITY on port: $PORT, RPC port: $RPC_PORT. Console logs sent to ./$IDENTITY/console.log"
-  Write-Output "./bin/geth.exe --port=$PORT --rpcport=$RPC_PORT --datadir=./$IDENTITY --ipcpath=./$IDENTITY/geth.ipc $FLAGS $DEV_FLAGS console 2>> ./$IDENTITY/console.log"
-  ./bin/geth.exe --port=$PORT --rpcport=$RPC_PORT --ipcpath="$PSScriptRoot\$IDENTITY\geth.ipc" --datadir="$PSScriptRoot\$IDENTITY\" $FLAGS $DEV_FLAGS console 2>> .\$IDENTITY\console.log
+  $args = "--port $PORT --rpcport $RPC_PORT --ipcpath ~/Documents/Projects/eth-private-net/$IDENTITY/geth.ipc --datadir ./$IDENTITY/ $FLAGS $DEV_FLAGS"
+  Write-Output "./bin/geth.exe $args console 2>> ./$IDENTITY/console.log"
+  Invoke-Expression "./bin/geth.exe $args console 2>> ./$IDENTITY/console.log"
 }
 
 function Connect-Node {
