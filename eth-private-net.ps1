@@ -133,7 +133,7 @@ function Start-Node {
   $RPC_PORT=$BASE_RPC_PORT + $OFFSET
 
   Write-Output "Starting node for $IDENTITY on port: $PORT, RPC port: $RPC_PORT. Console logs sent to ./$IDENTITY/console.log"
-  $args = "--port $PORT --rpcport $RPC_PORT --ipcpath ~/Documents/Projects/eth-private-net/$IDENTITY/geth.ipc --datadir ./$IDENTITY/ $FLAGS $DEV_FLAGS"
+  $args = "--port $PORT --rpcport $RPC_PORT --ipcpath ./$IDENTITY/geth.ipc --datadir ./$IDENTITY/ $FLAGS $DEV_FLAGS"
   Write-Output "./bin/geth.exe $args console 2>> ./$IDENTITY/console.log"
   Invoke-Expression "./bin/geth.exe $args console 2>> ./$IDENTITY/console.log"
 }
