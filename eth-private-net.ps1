@@ -133,24 +133,26 @@ function Start-Node {
   $RPC_PORT=$BASE_RPC_PORT + $OFFSET
 
   Write-Output "Starting node for $IDENTITY on port: $PORT, RPC port: $RPC_PORT. Console logs sent to ./$IDENTITY/console.log"
-  $args = "--port $PORT --rpcport $RPC_PORT --ipcpath ./$IDENTITY/geth.ipc --datadir ./$IDENTITY/ $FLAGS $DEV_FLAGS"
-  Write-Output "./bin/geth.exe $args console 2>> ./$IDENTITY/console.log"
+  $args = "--port $PORT --rpc --rpcapi admin,eth,web3 --rpcport $RPC_PORT --ipcpath ./$IDENTITY/geth.ipc --datadir ./$IDENTITY/ $FLAGS $DEV_FLAGS"
   Invoke-Expression "./bin/geth.exe $args console 2>> ./$IDENTITY/console.log"
 }
 
 function Connect-Node {
   param([string] $IDENTITY1, [string] $IDENTITY2)
-  Write-Output  "Connect geth from $IDENTITY1 to $IDENTITY2"
+  Write-Output "Connect geth from $IDENTITY1 to $IDENTITY2"
   $ENODE=ExecOnNode 'admin.nodeInfo.enode' $IDENTITY1
-  # CONNECT_JS="admin.addPeer($ENODE)"
-
-  # exec_on_node $IDENTITY2 $CONNECT_JS
-  Write-Output  "Print $ENODE"
+  $CONNECT_JS="admin.addPeer($ENODE)"
+  Write-Output  "$CONNECT_JS"
+  $CONNECT_JS = 'admin.addPeer("enode://9045fb138d3de7f1314229096a4d208a7827d18f5b7df55a18015e7c7a3be9d1e8de120d2ac58b03965ef6a2196597cd8ee697da551fd413a40cba4b8454815f@[::]:40303?discport=0")'
+  ExecOnNode $CONNECT_JS $IDENTITY2
 }
 
 function ExecOnNode {
   param($Exec, $Identity)
-  ./bin/geth --exec="$Exec" attach ./$Identity/geth.ipc
+
+  $OFFSET = GetOffset $IDENTITY
+  $RPC_PORT=$BASE_RPC_PORT + $OFFSET
+  Invoke-Expression "./bin/geth --exec='$Exec' attach http://localhost:$RPC_PORT"
 }
 
 switch ($CMD) {
